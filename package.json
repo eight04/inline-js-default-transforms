@@ -1,0 +1,30 @@
+{
+  "name": "inline-js-default-transforms",
+  "version": "0.0.0",
+  "description": "Builtin transformers for inline-js",
+  "author": "eight04 <eight04@gmail.com>",
+  "license": "MIT",
+  "scripts": {
+    "lint": "eslint **/*.js --ignore-pattern coverage --cache",
+    "nyc": "nyc --reporter=html mocha",
+    "test": "npm run lint && npm run nyc",
+    "preversion": "npm test",
+    "postversion": "git push --follow-tags && npm publish"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "clean-css": "^4.1.11",
+    "mime": "^2.3.1"
+  },
+  "peerDependencies": {
+    "inline-js-core": "*"
+  },
+  "devDependencies": {
+    "dataurl": "^0.1.0",
+    "eslint": "^4.19.1",
+    "mocha": "^5.2.0",
+    "mocha-context": "^0.1.5",
+    "nyc": "^11.8.0"
+  },
+  "repository": "eight04/inline-js-default-transforms"
+}
