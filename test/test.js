@@ -43,8 +43,8 @@ describe("transforms", () => {
   it("docstring", () => {
     const test = prepare({
       name: "docstring",
-      content: "`test escaped?\\`\"\\\" new line? \\n`",
-      expect: "test escaped?`\"\" new line? \n"
+      content: "`test escaped?\\`\"\\\" new line? \\n\r\n`",
+      expect: "test escaped?`\"\" new line? \n\n"
     });
     return test();
   });
