@@ -11,6 +11,7 @@
     "preversion": "npm test",
     "postversion": "git push --follow-tags && npm publish"
   },
+  "files": [],
   "main": "index.js",
   "dependencies": {
     "clean-css": "^4.1.11",
