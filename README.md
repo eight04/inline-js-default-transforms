@@ -121,6 +121,10 @@ var myCssString = $inline("./style.css|cssmin|stringify");
 Changelog
 ---------
 
+* 0.1.1 (Jun 28, 2018)
+
+  - Fix: exclude test files from the package.
+
 * 0.1.0 (Jun 27, 2018)
 
-    - First release.
+  - Split out from inline-js.
