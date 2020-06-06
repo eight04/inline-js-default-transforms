@@ -4,7 +4,9 @@
   "description": "Builtin transformers for inline-js",
   "author": "eight04 <eight04@gmail.com>",
   "license": "MIT",
-  "eslintIgnore": ["coverage"],
+  "eslintIgnore": [
+    "coverage"
+  ],
   "scripts": {
     "lint": "eslint **/*.js --cache",
     "test": "npm run lint && c8 --reporter lcov mocha",
@@ -23,10 +25,13 @@
   "devDependencies": {
     "c8": "^5.0.1",
     "dataurl": "^0.1.0",
+    "endent": "^2.0.1",
     "eslint": "^5.16.0",
     "inline-js-core": "^0.5.0",
+    "inline-js-default-resources": "^0.1.0",
     "mocha": "^6.1.4",
-    "mocha-context": "^0.1.5"
+    "mocha-context": "^0.1.5",
+    "tempdir-yaml": "^0.3.0"
   },
   "repository": "eight04/inline-js-default-transforms"
 }

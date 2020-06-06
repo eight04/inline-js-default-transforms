@@ -1,194 +1,455 @@
 /* eslint-env mocha */
 const assert = require("assert");
 const dataurl = require("dataurl");
-const {createTransformer} = require("inline-js-core/lib/transformer");
-const {TRANSFORMS} = require("..");
+const {withDir} = require("tempdir-yaml");
+const {default: endent} = require("endent");
 
-describe("transforms", () => {
-  const transformer = createTransformer();
-  TRANSFORMS.forEach(transformer.add);
-	
-  function prepare(baseOptions) {
-    return options => {
-      const {
-        name,
-        content,
-        args = [],
-        expect,
-        source,
-        error,
-        ctx = {inlineTarget: source}
-      } = Object.assign({}, baseOptions, options);
-      return transformer.transform(ctx, content, [{name, args}])
-        .then(
-          result => assert.equal(result, expect),
-          err => {
-            if (!error) {
-              throw err;
-            }
+const {createInliner} = require("inline-js-core");
+
+const inliner = createInliner();
+inliner.useConfig({
+  resources: require("inline-js-default-resources").RESOURCES,
+  transforms: require("..").TRANSFORMS
+});
+
+it("cssmin", () =>
+  withDir(`
+    - entry.txt: |-
+        $inline("foo.css|cssmin")
+    - foo.css: |
+        body {
+          color: #000000;
+        }
+  `, async resolve => {
+    const {content} = await inliner.inline({
+      target: {
+        name: "file",
+        args: [resolve("entry.txt")]
+      }
+    });
+    
+    assert.equal(content, "body{color:#000}");
+  })
+);
+
+it("docstring", () =>
+  withDir(`
+    - entry.txt: |-
+        $inline("foo.js|docstring")
+    - foo.js: |
+        require("neodoc").run(\`
+        some text
+        \\\\\`escape chars\\\\\`
+        \`)
+  `, async resolve => {
+    const fs = require("fs");
+    console.log(fs.readFileSync(resolve("foo.js"), "utf8"));
+    const {content} = await inliner.inline({
+      target: {
+        name: "file",
+        args: [resolve("entry.txt")]
+      }
+    });
+    
+    assert.equal(content, "\nsome text\n`escape chars`\n");
+  })
+);
+
+it("eval", () =>
+  withDir(`
+    - entry.txt: |-
+        $inline("foo.txt|eval:Number($0)+321")
+    - foo.txt: |
+        123
+  `, async resolve => {
+    const {content} = await inliner.inline({
+      target: {
+        name: "file",
+        args: [resolve("entry.txt")]
+      }
+    });
+    
+    assert.equal(content, "444");
+  })
+);
+
+describe("indent", () => {
+  it("no effect without whitespace", () =>
+    withDir(`
+      - entry.txt: |-
+          foo {
+          $inline("foo.txt|indent")
           }
-        );
-    };
-  }
-	
-	it("cssmin", () => {
-    const test = prepare({
-      name: "cssmin",
-      content: 'body {\n  color: #000000;\n}\n',
-      expect: "body{color:#000}"
-    });
-    return test();
-	});
+      - foo.txt: |-
+          bar
+          baz
+    `, async resolve => {
+      const {content} = await inliner.inline({
+        target: {
+          name: "file",
+          args: [resolve("entry.txt")]
+        }
+      });
+      
+      assert.equal(content, endent`
+        foo {
+        bar
+        baz
+        }
+      `);
+    })
+  );
   
-  it("docstring", () => {
-    const test = prepare({
-      name: "docstring",
-      content: "`test escaped?\\`\"\\\" new line? \\n\r\n`",
-      expect: "test escaped?`\"\" new line? \n\n"
-    });
-    return test();
-  });
-	
-	it("eval", () => {
-    const test = prepare({
-      name: "eval",
-      content: "123",
-      args: ["Number($0) + 321"],
-      expect: 444
-    });
-    return test();
-  });
+  it("works with $inline", () =>
+    withDir(`
+      - entry.txt: |-
+          foo {
+            $inline("foo.txt|indent")
+          }
+      - foo.txt: |-
+          bar
+          baz
+    `, async resolve => {
+      const {content} = await inliner.inline({
+        target: {
+          name: "file",
+          args: [resolve("entry.txt")]
+        }
+      });
+      
+      assert.equal(content, endent`
+        foo {
+          bar
+          baz
+        }
+      `);
+    })
+  );
   
-  describe("indent", () => {
-    const ctx = {
-      sourceContent: "  $inline('foo|indent')",
-      inlineDirective: {
-        start: 2,
-        end: 23
-      }
-    };
-    const test = prepare({
-      name: "indent",
-      content: "foo\nbar",
-      ctx,
-      expect: "foo\n  bar"
-    });
-    
-    it("basic", () => test());
-    
-    it("no indent", () => test({
-      ctx: Object.assign({}, ctx, {sourceContent: "__$inline('foo|indent')"}),
-      expect: "foo\nbar"
-    }));
-  });
-	
-	it("parse", () => {
-    const test = prepare({
-      name: "parse",
-      content: '{"version": "1.2.3","nested": {"prop": 123}}'
-    });
-    return Promise.all([
-      test({args: ["version"], expect: "1.2.3"}),
-      test({args: ["nested", "prop"], expect: 123})
-    ]);
-	});
-  
-  it("string", () => {
-    const test = prepare({
-      name: "string",
-      content: Buffer.from("我")
-    });
-    return Promise.all([
-      test({expect: "我"}),
-      test({args: ["binary"], expect: 'æ'}),
-      test({content: "test", expect: "test"})
-    ]);
-  });
-  
-  it("stringify", () => {
-    const test = prepare({
-      name: "stringify",
-      content: "some text",
-      expect: '"some text"'
-    });
-    return test();
-  });
-  
-  it("trim", () => {
-    const test = prepare({
-      name: "trim",
-      content: " foo  ",
-      expect: "foo"
-    });
-    return test();
-  });
-	
-	it("markdown", () => {
-    const test = prepare({
-      name: "markdown",
-      content: "some text"
-    });
-    return Promise.all([
-      test({args: ["codeblock"], expect: "```\nsome text\n```"}),
-      test({args: ["code"], expect: "`some text`"}),
-      test({args: ["quote"], expect: "> some text"}),
-      test({
-        args: ["quote"],
-        content: "some text\nsome text",
-        expect: "> some text\n> some text"
-      }),
-      test({args: ["unknown"], error: true})
-    ]);
-	});
-	
-	describe("dataurl", () => {
-    const test = prepare({name: "dataurl"});
-    
-    it("unknown file, default to text file", () =>
-      test({
-        source: {name: "file", args: ["test"]},
-        content: Buffer.from("foo"),
-        expect: dataurl.format({data: Buffer.from("foo"), mimetype: "text/plain", charset: "utf8"})
-      })
-    );
-    
-    it("big5 encoded binary", () =>
-      test({
-        source: {name: "raw", args: ["test"]},
-        args: ["text/plain", "big5"],
-        content: Buffer.from("foo"),
-        expect: dataurl.format({data: Buffer.from("foo"), mimetype: "text/plain", charset: "big5"})
-      })
-    );
-    
-    it("text file", () =>
-      test({
-        source: {name: "file", args: ["test.css"]},
-        content: "foo",
-        expect: dataurl.format({data: "foo", mimetype: "text/css", charset: "utf8"})
-      })
-    );
-    
-    it("binary file", () =>
-      test({
-        source: {name: "file", args: ["test.png"]},
-        content: Buffer.from("foo"),
-        expect: dataurl.format({data: Buffer.from("foo"), mimetype: "image/png"})
-      })
-    );
-	});
-  
-  it("handle promise", () => {
-    transformer.add({
-      name: "testPromise",
-      transform() {
-        return new Promise(resolve => {
-          setTimeout(() => resolve("OK"), 10);
-        });
+  it("works with $inline.start", () =>
+    withDir(`
+      - entry.txt: |-
+          foo {
+            // $inline.start("foo.txt|indent");
+            ...
+            // $inline.end
+          }
+      - foo.txt: |-
+          bar
+          baz
+    `, async resolve => {
+      const {content} = await inliner.inline({
+        target: {
+          name: "file",
+          args: [resolve("entry.txt")]
+        }
+      });
+      
+      assert.equal(content, endent`
+        foo {
+          // $inline.start("foo.txt|indent");
+          bar
+          baz
+          // $inline.end
+        }
+      `);
+    })
+  );
+});
+
+it("parse", () =>
+  withDir(`
+    - entry.txt: |-
+        $inline("foo.txt|parse:version")
+        $inline("foo.txt|parse:nested,prop")
+    - foo.txt: |-
+        {
+          "version": 1,
+          "nested": {
+            "prop": 2
+          }
+        }
+  `, async resolve => {
+    const {content} = await inliner.inline({
+      target: {
+        name: "file",
+        args: [resolve("entry.txt")]
       }
     });
     
-    const test = prepare({name: "testPromise", expect: "OK"});
-    return test();
-  });
+    assert.equal(content, endent`
+      1
+      2
+    `);
+  })
+);
+
+describe("string", () => {
+  it("buffer to string", () =>
+    withDir(`
+      - entry.txt: |-
+          $inline("raw:foo.txt|string")
+      - foo.txt: |-
+          我
+    `, async resolve => {
+      const {content} = await inliner.inline({
+        target: {
+          name: "file",
+          args: [resolve("entry.txt")]
+        }
+      });
+      assert.equal(content, "我");
+    })
+  );
+  
+  it("buffer to binary string", () =>
+    withDir(`
+      - entry.txt: |-
+          $inline("raw:foo.txt|string:binary")
+      - foo.txt: |-
+          我
+    `, async resolve => {
+      const {content} = await inliner.inline({
+        target: {
+          name: "file",
+          args: [resolve("entry.txt")]
+        }
+      });
+      assert.equal(content, 'æ');
+    })
+  );
+  
+  it("string to string (no effect)", () =>
+    withDir(`
+      - entry.txt: |-
+          $inline("text:foo.txt|string")
+      - foo.txt: |-
+          我
+    `, async resolve => {
+      const {content} = await inliner.inline({
+        target: {
+          name: "file",
+          args: [resolve("entry.txt")]
+        }
+      });
+      assert.equal(content, '我');
+    })
+  );
+});
+
+it("stringify", () =>
+  withDir(`
+    - entry.txt: |-
+        $inline("foo.txt|stringify")
+    - foo.txt: |-
+        test
+  `, async resolve => {
+    const {content} = await inliner.inline({
+      target: {
+        name: "file",
+        args: [resolve("entry.txt")]
+      }
+    });
+    assert.equal(content, '"test"');
+  })
+);
+
+it("trim", () =>
+  withDir(`
+    - entry.txt: |-
+        $inline("foo.txt")
+    - entry2.txt: |-
+        $inline("foo.txt|trim")
+    - foo.txt: |
+    
+    
+        test
+        
+        
+        
+  `, async resolve => {
+    const {content: rawContent} = await inliner.inline({
+      target: {
+        name: "file",
+        args: [resolve("entry.txt")]
+      }
+    });
+    const {content: trimmedContent} = await inliner.inline({
+      target: {
+        name: "file",
+        args: [resolve("entry2.txt")]
+      }
+    });
+    assert.notEqual(rawContent, trimmedContent);
+    assert.equal(rawContent.trim(), trimmedContent);
+  })
+);
+
+describe("markdown", () => {
+  it("codeblock", () =>
+    withDir(`
+      - entry.txt: |-
+          $inline("foo.txt|markdown:codeblock")
+      - foo.txt: |-
+          foo
+    `, async resolve => {
+      const {content} = await inliner.inline({
+        target: {
+          name: "file",
+          args: [resolve("entry.txt")]
+        }
+      });
+      assert.equal(content, endent`
+        \`\`\`
+        foo
+        \`\`\`
+      `);
+    })
+  );
+  
+  it("codeblock with lang", () =>
+    withDir(`
+      - entry.txt: |-
+          $inline("foo.txt|markdown:codeblock,js")
+      - foo.txt: |-
+          foo
+    `, async resolve => {
+      const {content} = await inliner.inline({
+        target: {
+          name: "file",
+          args: [resolve("entry.txt")]
+        }
+      });
+      assert.equal(content, endent`
+        \`\`\`js
+        foo
+        \`\`\`
+      `);
+    })
+  );
+  
+  it("code", () =>
+    withDir(`
+      - entry.txt: |-
+          $inline("foo.txt|markdown:code")
+      - foo.txt: |-
+          foo
+    `, async resolve => {
+      const {content} = await inliner.inline({
+        target: {
+          name: "file",
+          args: [resolve("entry.txt")]
+        }
+      });
+      assert.equal(content, "`foo`");
+    })
+  );
+  
+  it("quote", () =>
+    withDir(`
+      - entry.txt: |-
+          $inline("foo.txt|markdown:quote")
+      - foo.txt: |-
+          foo
+    `, async resolve => {
+      const {content} = await inliner.inline({
+        target: {
+          name: "file",
+          args: [resolve("entry.txt")]
+        }
+      });
+      assert.equal(content, "> foo");
+    })
+  );
+  
+  it("multiline quote", () =>
+    withDir(`
+      - entry.txt: |-
+          $inline("foo.txt|markdown:quote")
+      - foo.txt: |-
+          foo
+          bar
+    `, async resolve => {
+      const {content} = await inliner.inline({
+        target: {
+          name: "file",
+          args: [resolve("entry.txt")]
+        }
+      });
+      assert.equal(content, endent`
+        > foo
+        > bar
+      `);
+    })
+  );
+});
+  
+describe("dataurl", () => {
+  it("unknown file, default to text file", () =>
+    withDir(`
+      - entry.txt: |-
+          $inline("foo|dataurl")
+      - foo: |-
+          foo
+    `, async resolve => {
+      const {content} = await inliner.inline({
+        target: {
+          name: "file",
+          args: [resolve("entry.txt")]
+        }
+      });
+      assert.equal(content, dataurl.format({data: Buffer.from("foo"), mimetype: "text/plain", charset: "utf8"}));
+    })
+  );
+  
+  it("big5 encoded binary", () =>
+    withDir(`
+      - entry.txt: |-
+          $inline("raw:foo|dataurl:text/plain,big5")
+      - foo: |-
+          foo
+    `, async resolve => {
+      const {content} = await inliner.inline({
+        target: {
+          name: "file",
+          args: [resolve("entry.txt")]
+        }
+      });
+      assert.equal(content, dataurl.format({data: Buffer.from("foo"), mimetype: "text/plain", charset: "big5"}));
+    })
+  );
+  
+  it("text file", () =>
+    withDir(`
+      - entry.txt: |-
+          $inline("foo.css|dataurl:")
+      - foo.css: |-
+          foo
+    `, async resolve => {
+      const {content} = await inliner.inline({
+        target: {
+          name: "file",
+          args: [resolve("entry.txt")]
+        }
+      });
+      assert.equal(content, dataurl.format({data: "foo", mimetype: "text/css", charset: "utf8"}));
+    })
+  );
+  
+  it("binary file", () =>
+    withDir(`
+      - entry.txt: |-
+          $inline("foo.png|dataurl:")
+      - foo.png: |-
+          foo
+    `, async resolve => {
+      const {content} = await inliner.inline({
+        target: {
+          name: "file",
+          args: [resolve("entry.txt")]
+        }
+      });
+      assert.equal(content, dataurl.format({data: Buffer.from("foo"), mimetype: "image/png"}));
+    })
+  );
 });
