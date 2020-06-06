@@ -32,7 +32,10 @@ const TRANSFORMS = [{
       return content;
     }
     const [firstLine, ...lines] = content.split("\n");
-    return [firstLine, ...lines.map(l => indent + l)].join("\n");
+    return [
+      (ctx.inlineDirective.type === "$inline.start" ? indent : "") + firstLine,
+      ...lines.map(l => indent + l)
+    ].join("\n");
   }
 }, {
 	name: "stringify",
