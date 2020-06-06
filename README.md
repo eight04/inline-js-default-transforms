@@ -126,6 +126,11 @@ var myCssString = $inline("./style.css|cssmin|stringify");
 Changelog
 ---------
 
+* 0.1.2 (Jun 6, 2020)
+
+  - Fix: make `indent` work with `$inline.start`.
+  - Add: support language mark in `markdown:codeblock`.
+
 * 0.1.1 (Jun 28, 2018)
 
   - Fix: exclude test files from the package.
