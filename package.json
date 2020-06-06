@@ -1,6 +1,6 @@
 {
   "name": "inline-js-default-transforms",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Builtin transformers for inline-js",
   "author": "eight04 <eight04@gmail.com>",
   "license": "MIT",
