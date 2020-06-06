@@ -91,6 +91,11 @@ some text
 some text
 ```
 
+// $inline("a.txt|markdown:codeblock,js")
+```js
+some text
+```
+
 // $inline("a.txt|markdown:code")
 `some text`
 

@@ -67,9 +67,9 @@ const TRANSFORMS = [{
 	}
 }, {
 	name: "markdown",
-	transform(ctx, content, type) {
+	transform(ctx, content, type, ...args) {
 		if (type == "codeblock") {
-			return "```\n" + content + "\n```";
+			return `\`\`\`${args.length ? args[0] : ""}\n${content}\n\`\`\``;
 		}
 		if (type == "code") {
 			return "`" + content + "`";
